@@ -227,9 +227,21 @@ function detectSubType(url) {
     return '';
 }
 
+// 生成带国家地区信息的备注
+function getNodeRemark(item, remark) {
+    const loc = item.location;
+    if (loc && loc.countryCode) {
+        const codePoints = loc.countryCode.toUpperCase().split('').map(char => 127397 + char.charCodeAt());
+        const flag = String.fromCodePoint(...codePoints);
+        const city = loc.city || loc.country || '';
+        return remark + '\u00b7' + flag + ' ' + city;
+    }
+    return remark + '\u00b7' + item.ip;
+}
+
 // Joey/EdgeTunnel 格式: IP:端口#备注, 逗号分隔
 async function generateJoeySubscription(fastIPs, port, remark) {
-    const nodeList = fastIPs.map(item => `${item.ip}:${port}#${remark}·${item.ip}`).join(',');
+    const nodeList = fastIPs.map(item => `${item.ip}:${port}#${getNodeRemark(item, remark)}`).join(',');
     return new Response(nodeList, {
         headers: {
             'Content-Type': 'text/plain; charset=utf-8',
@@ -241,7 +253,7 @@ async function generateJoeySubscription(fastIPs, port, remark) {
 
 // CMLIU 格式: IP:端口#备注, 换行分隔
 async function generateCMLSubscription(fastIPs, port, remark) {
-    const nodeList = fastIPs.map(item => `${item.ip}:${port}#${remark}·${item.ip}`).join('\n');
+    const nodeList = fastIPs.map(item => `${item.ip}:${port}#${getNodeRemark(item, remark)}`).join('\n');
     return new Response(nodeList, {
         headers: {
             'Content-Type': 'text/plain; charset=utf-8',
@@ -253,7 +265,7 @@ async function generateCMLSubscription(fastIPs, port, remark) {
 
 // SNI 格式: IP:端口@SNI#备注
 async function generateSNISubscription(fastIPs, port, sni, remark) {
-    const nodeList = fastIPs.map(item => `${item.ip}:${port}@${sni}#${remark}·${item.ip}`).join('\n');
+    const nodeList = fastIPs.map(item => `${item.ip}:${port}@${sni}#${getNodeRemark(item, remark)}`).join('\n');
     return new Response(nodeList, {
         headers: {
             'Content-Type': 'text/plain; charset=utf-8',
@@ -284,7 +296,7 @@ async function generateEdgeTunnelSubscription(request, fastIPs, remark) {
         return 'vless://' + uuid + '@' + item.ip + ':' + port +
             '?security=tls&type=ws&host=' + host + '&fp=chrome&sni=' + host +
             '&path=' + encodeURIComponent(path) + '&encryption=none#' +
-            encodeURIComponent(remark + '\u00b7' + item.ip);
+            encodeURIComponent(getNodeRemark(item, remark));
     });
     const content = nodeLinks.join('\n');
     const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -301,10 +313,10 @@ async function generateEdgeTunnelSubscription(request, fastIPs, remark) {
 async function generateBase64Subscription(fastIPs, uuid, port, sni, proxyIP, remark) {
     const nodeLinks = [];
     fastIPs.forEach(item => {
-        nodeLinks.push(`vless://${uuid}@${item.ip}:${port}?encryption=none&security=tls&sni=${sni}&fp=chrome&type=tcp${proxyIP ? '&proxyIP=' + proxyIP : ''}#${remark}·VLESS·${item.ip}`);
+        nodeLinks.push(`vless://${uuid}@${item.ip}:${port}?encryption=none&security=tls&sni=${sni}&fp=chrome&type=tcp${proxyIP ? '&proxyIP=' + proxyIP : ''}#${getNodeRemark(item, remark + '·VLESS')}`);
     });
     fastIPs.forEach(item => {
-        nodeLinks.push(`trojan://${uuid}@${item.ip}:${port}?security=tls&sni=${sni}&fp=chrome&type=tcp#${remark}·Trojan·${item.ip}`);
+        nodeLinks.push(`trojan://${uuid}@${item.ip}:${port}?security=tls&sni=${sni}&fp=chrome&type=tcp#${getNodeRemark(item, remark + '·Trojan')}`);
     });
     const content = nodeLinks.join('\n');
     const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -321,7 +333,7 @@ async function generateBase64Subscription(fastIPs, uuid, port, sni, proxyIP, rem
 // 纯VLESS订阅 (Base64)
 async function generateVLESSSubscription(fastIPs, uuid, port, sni, proxyIP, remark) {
     const nodeLinks = fastIPs.map(item =>
-        `vless://${uuid}@${item.ip}:${port}?encryption=none&security=tls&sni=${sni}&fp=chrome&type=tcp${proxyIP ? '&proxyIP=' + proxyIP : ''}#${remark}·${item.ip}`
+        `vless://${uuid}@${item.ip}:${port}?encryption=none&security=tls&sni=${sni}&fp=chrome&type=tcp${proxyIP ? '&proxyIP=' + proxyIP : ''}#${getNodeRemark(item, remark)}`
     );
     const content = nodeLinks.join('\n');
     const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -338,7 +350,7 @@ async function generateVLESSSubscription(fastIPs, uuid, port, sni, proxyIP, rema
 // 纯Trojan订阅 (Base64)
 async function generateTrojanSubscription(fastIPs, uuid, port, sni, remark) {
     const nodeLinks = fastIPs.map(item =>
-        `trojan://${uuid}@${item.ip}:${port}?security=tls&sni=${sni}&fp=chrome&type=tcp#${remark}·${item.ip}`
+        `trojan://${uuid}@${item.ip}:${port}?security=tls&sni=${sni}&fp=chrome&type=tcp#${getNodeRemark(item, remark)}`
     );
     const content = nodeLinks.join('\n');
     const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -359,7 +371,7 @@ async function generateClashSubscription(fastIPs, uuid, port, sni, remark) {
     fastIPs.forEach(item => {
         const ip = item.ip;
         const shortIp = ip.split('.').slice(-2).join('.');
-        const vlessName = `${remark}·VL·${shortIp}`;
+        const vlessName = `${getNodeRemark(item, remark + '·VL')}`;
         proxies.push(`  - name: "${vlessName}"
     type: vless
     server: ${ip}
@@ -371,7 +383,7 @@ async function generateClashSubscription(fastIPs, uuid, port, sni, remark) {
     network: tcp
     client-fingerprint: chrome`);
         proxyNames.push(vlessName);
-        const trojanName = `${remark}·TR·${shortIp}`;
+        const trojanName = `${getNodeRemark(item, remark + '·TR')}`;
         proxies.push(`  - name: "${trojanName}"
     type: trojan
     server: ${ip}

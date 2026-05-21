@@ -1442,15 +1442,16 @@ const latency = item.latency;
 const location = item.location || {};
 const speedClass = latency < 200 ? 'speed-fast' : latency < 500 ? 'speed-medium' : 'speed-slow';
 const locationText = location.country ?
-`${getCountryFlag(location.countryCode)} ${location.city || location.country}${location.org ? ' · ' + location.org : ''}` :
+`${location.city || location.country}${location.org ? ' · ' + location.org : ''}` :
 '📍 查询中...';
 const locationClass = location.country ? '' : ' loading-location';
+const countryCode = location.countryCode || '';
 return `
 <div class="ip-item" data-ip="${ip}">
 <div class="ip-info">
 <span class="ip-address">${ip}</span>
 <span class="speed-result ${speedClass}" id="speed-${ip.replace(/\./g, '-')}">${latency}ms</span>
-<span class="ip-location${locationClass}" id="loc-${ip.replace(/\./g, '-')}" title="${location.country ? location.country + ' ' + (location.city || '') + ' | ' + (location.org || '') : '正在查询地理位置...'}">${locationText}</span>
+<span class="ip-location${locationClass}" id="loc-${ip.replace(/\./g, '-')}" data-cc="${countryCode}" title="${location.country ? location.country + ' ' + (location.city || '') + ' | ' + (location.org || '') : '正在查询地理位置...'}">${locationText}</span>
 </div>
 <div class="action-buttons">
 <button class="small-btn" onclick="copyIP('${ip}')">复制</button>
@@ -2021,7 +2022,15 @@ const ipsToQuery = [];
 ipItems.forEach(item => {
 const ip = item.dataset.ip;
 const locEl = document.getElementById('loc-' + ip.replace(/\./g, '-'));
-if (locEl && (!locEl.textContent.trim() || locEl.textContent.includes('查询中'))) {
+if (!locEl) return;
+// 有data-cc但没国旗的，补上国旗
+const cc = locEl.dataset.cc;
+if (cc && !locEl.textContent.startsWith('📍')) {
+locEl.textContent = getCountryFlag(cc) + ' ' + locEl.textContent;
+locEl.className = 'ip-location';
+}
+// 没有位置信息的，需要查询
+if (!locEl.textContent.trim() || locEl.textContent.includes('查询中')) {
 ipsToQuery.push({ ip, element: locEl });
 }
 });
